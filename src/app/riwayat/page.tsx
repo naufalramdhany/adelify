@@ -2,10 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import Header from "../../components/header";
 import Sidebar from "../../components/sidebar";
 import { createClient } from "../../lib/supabase";
-import { FaFilter, FaCalendarAlt, FaMoneyBillWave, FaTimesCircle } from "react-icons/fa";
+
+import {
+  FaFilter,
+  FaCalendarAlt,
+  FaMoneyBillWave,
+  FaTimesCircle,
+  FaChevronLeft,
+  FaChevronRight,
+} from "react-icons/fa";
 
 type Pengeluaran = {
   id: string;
@@ -16,9 +25,21 @@ type Pengeluaran = {
 };
 
 const namaBulan = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
 ];
+
+const ITEMS_PER_PAGE = 10;
 
 export default function RiwayatPengeluaranPage() {
   const router = useRouter();
@@ -27,17 +48,27 @@ export default function RiwayatPengeluaranPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const today = new Date();
-  const [bulanFilter, setBulanFilter] = useState<string>(String(today.getMonth() + 1));
-  const [tahunFilter, setTahunFilter] = useState<string>(String(today.getFullYear()));
+
+  const [bulanFilter, setBulanFilter] = useState<string>(
+    String(today.getMonth() + 1)
+  );
+
+  const [tahunFilter, setTahunFilter] = useState<string>(
+    String(today.getFullYear())
+  );
+
+  const [data, setData] = useState<Pengeluaran[]>([]);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
 
   const daftarTahun = useMemo(() => {
     const tahunSekarang = today.getFullYear();
+
     return Array.from({ length: 6 }, (_, i) => tahunSekarang - i);
   }, []);
-
-  const [data, setData] = useState<Pengeluaran[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
 
   const formatRupiah = (value: number) =>
     new Intl.NumberFormat("id-ID", {
@@ -56,7 +87,7 @@ export default function RiwayatPengeluaranPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/login");
+        router.push("/");
         return;
       }
 
@@ -64,15 +95,21 @@ export default function RiwayatPengeluaranPage() {
       const tahun = Number(tahunFilter);
 
       const awalBulan = `${tahun}-${String(bulan).padStart(2, "0")}-01`;
+
       const akhirTanggal = new Date(tahun, bulan, 0).getDate();
-      const akhirBulan = `${tahun}-${String(bulan).padStart(2, "0")}-${String(akhirTanggal).padStart(2, "0")}`;
+
+      const akhirBulan = `${tahun}-${String(bulan).padStart(
+        2,
+        "0"
+      )}-${String(akhirTanggal).padStart(2, "0")}`;
 
       const { data: rows, error } = await supabase
         .from("pengeluaran")
         .select("id, tanggal, jenis, jumlah, keterangan")
         .gte("tanggal", awalBulan)
         .lte("tanggal", akhirBulan)
-        .order("tanggal", { ascending: false });
+        .order("tanggal", { ascending: false })
+        .order("id", { ascending: false });
 
       if (error) {
         setErrorMsg("Gagal memuat data pengeluaran.");
@@ -82,17 +119,43 @@ export default function RiwayatPengeluaranPage() {
         setData(rows ?? []);
       }
 
+      setCurrentPage(1);
       setIsLoading(false);
     };
 
     fetchData();
   }, [bulanFilter, tahunFilter]);
 
-  const totalFiltered = data.reduce((acc, item) => acc + item.jumlah, 0);
+  const totalFiltered = data.reduce(
+    (acc, item) => acc + Number(item.jumlah),
+    0
+  );
+
+  const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE);
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+
+  const currentData = data.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
 
   const resetFilter = () => {
     setBulanFilter(String(today.getMonth() + 1));
     setTahunFilter(String(today.getFullYear()));
+    setCurrentPage(1);
+  };
+
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage((prev) => prev + 1);
+    }
   };
 
   return (
@@ -100,7 +163,10 @@ export default function RiwayatPengeluaranPage() {
       <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
+      <Sidebar
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+      />
 
       <main className="md:ml-64 flex flex-col min-h-screen relative">
         <Header setIsSidebarOpen={setIsSidebarOpen} />
@@ -116,17 +182,24 @@ export default function RiwayatPengeluaranPage() {
           <div className="bg-[#111827] border border-white/10 rounded-2xl shadow-lg shadow-black/20 p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <FaFilter className="text-indigo-400" />
-              <h2 className="text-sm font-semibold text-gray-200">Filter Periode</h2>
+              <h2 className="text-sm font-semibold text-gray-200">
+                Filter Periode
+              </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium mb-2 text-gray-400">Bulan</label>
+                <label className="block text-xs font-medium mb-2 text-gray-400">
+                  Bulan
+                </label>
                 <div className="relative">
                   <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none" />
                   <select
                     value={bulanFilter}
-                    onChange={(e) => setBulanFilter(e.target.value)}
+                    onChange={(e) => {
+                      setBulanFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition [&>option]:bg-[#111827]"
                   >
                     {namaBulan.map((nama, index) => (
@@ -139,10 +212,15 @@ export default function RiwayatPengeluaranPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-2 text-gray-400">Tahun</label>
+                <label className="block text-xs font-medium mb-2 text-gray-400">
+                  Tahun
+                </label>
                 <select
                   value={tahunFilter}
-                  onChange={(e) => setTahunFilter(e.target.value)}
+                  onChange={(e) => {
+                    setTahunFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition [&>option]:bg-[#111827]"
                 >
                   {daftarTahun.map((tahun) => (
@@ -156,11 +234,16 @@ export default function RiwayatPengeluaranPage() {
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-4 pt-4 border-t border-white/10">
               <p className="text-xs text-gray-500">
-                {isLoading ? "Memuat data..." : `Menampilkan ${data.length} data · Total `}
+                {isLoading
+                  ? "Memuat data..."
+                  : `Menampilkan ${data.length} data · Total `}
                 {!isLoading && (
-                  <span className="text-gray-300 font-semibold">{formatRupiah(totalFiltered)}</span>
+                  <span className="text-gray-300 font-semibold">
+                    {formatRupiah(totalFiltered)}
+                  </span>
                 )}
               </p>
+
               <button
                 onClick={resetFilter}
                 className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition self-start sm:self-auto"
@@ -178,31 +261,45 @@ export default function RiwayatPengeluaranPage() {
                     <th className="px-6 py-4 font-semibold">Tanggal</th>
                     <th className="px-6 py-4 font-semibold">Jenis</th>
                     <th className="px-6 py-4 font-semibold">Keterangan</th>
-                    <th className="px-6 py-4 font-semibold text-right">Jumlah</th>
+                    <th className="px-6 py-4 font-semibold text-right">
+                      Jumlah
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
+                      <td
+                        colSpan={4}
+                        className="px-6 py-10 text-center text-gray-500"
+                      >
                         Memuat data pengeluaran...
                       </td>
                     </tr>
                   ) : data.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
+                      <td
+                        colSpan={4}
+                        className="px-6 py-10 text-center text-gray-500"
+                      >
                         Tidak ada pengeluaran pada periode ini.
                       </td>
                     </tr>
                   ) : (
-                    data.map((item) => (
-                      <tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition">
+                    currentData.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="border-b border-white/5 hover:bg-white/5 transition"
+                      >
                         <td className="px-6 py-4 text-gray-400">
-                          {new Date(item.tanggal).toLocaleDateString("id-ID", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })}
+                          {new Date(item.tanggal).toLocaleDateString(
+                            "id-ID",
+                            {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            }
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -210,9 +307,11 @@ export default function RiwayatPengeluaranPage() {
                             {item.jenis}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-gray-300">{item.keterangan}</td>
+                        <td className="px-6 py-4 text-gray-300">
+                          {item.keterangan}
+                        </td>
                         <td className="px-6 py-4 text-right text-gray-100 font-semibold">
-                          {formatRupiah(item.jumlah)}
+                          {formatRupiah(Number(item.jumlah))}
                         </td>
                       </tr>
                     ))
@@ -220,6 +319,58 @@ export default function RiwayatPengeluaranPage() {
                 </tbody>
               </table>
             </div>
+
+            {!isLoading && data.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-white/10">
+                <p className="text-xs text-gray-500">
+                  Menampilkan{" "}
+                  <span className="text-gray-300 font-semibold">
+                    {startIndex + 1}
+                  </span>
+                  {" - "}
+                  <span className="text-gray-300 font-semibold">
+                    {Math.min(startIndex + ITEMS_PER_PAGE, data.length)}
+                  </span>
+                  {" dari "}
+                  <span className="text-gray-300 font-semibold">
+                    {data.length}
+                  </span>
+                  {" riwayat"}
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handlePrevious}
+                    disabled={currentPage === 1}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+                      currentPage === 1
+                        ? "text-gray-600 border-white/5 bg-white/[0.02] cursor-not-allowed"
+                        : "text-gray-300 border-white/10 bg-white/5 hover:bg-white/10"
+                    }`}
+                  >
+                    <FaChevronLeft size={10} />
+                    Sebelumnya
+                  </button>
+
+                  <span className="px-3 py-2 text-xs text-gray-400">
+                    {currentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={handleNext}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+                      currentPage === totalPages
+                        ? "text-gray-600 border-white/5 bg-white/[0.02] cursor-not-allowed"
+                        : "text-gray-300 border-white/10 bg-white/5 hover:bg-white/10"
+                    }`}
+                  >
+                    Berikutnya
+                    <FaChevronRight size={10} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
