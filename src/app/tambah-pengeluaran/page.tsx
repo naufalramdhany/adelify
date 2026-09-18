@@ -29,62 +29,125 @@ const jenisPengeluaran = [
 export default function TambahPengeluaranPage() {
   const router = useRouter();
   const supabase = createClient();
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [formTanggal, setFormTanggal] = useState("");
   const [formJenis, setFormJenis] = useState(jenisPengeluaran[0]);
-  const [formJumlah, setFormJumlah] = useState("000");
+
+  const [formJumlah, setFormJumlah] = useState("1K");
+
   const [formKeterangan, setFormKeterangan] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     const today = new Date();
+
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
+
     setFormTanggal(`${year}-${month}-${day}`);
   }, []);
+
   const resetForm = () => {
     const today = new Date();
+
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
+
     setFormTanggal(`${year}-${month}-${day}`);
     setFormJenis(jenisPengeluaran[0]);
-    setFormJumlah("000");
+
+    setFormJumlah("1K");
+
     setFormKeterangan("");
   };
+
   const handleJumlahChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    let value = e.target.value;
-    value = value.replace(/\D/g, "");
+    let value = e.target.value.toUpperCase();
+
+    value = value.replace(/[^0-9.K]/g, "");
+
+    const kCount = (value.match(/K/g) || []).length;
+
+    if (kCount > 1) {
+      return;
+    }
+
+    if (value.includes("K") && !value.endsWith("K")) {
+      return;
+    }
+
+    if (value.endsWith("K")) {
+      const angka = value.slice(0, -1);
+
+      if (angka === "") {
+        setFormJumlah("");
+        return;
+      }
+
+      const jumlahK = Number(angka);
+
+      if (!isNaN(jumlahK)) {
+        setFormJumlah(value);
+      }
+
+      return;
+    }
+
     setFormJumlah(value);
   };
+
   const handleSimpan = async (
     e: React.FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
+
     if (!formTanggal || !formJumlah || !formKeterangan) {
       toast.error("Mohon lengkapi semua data.");
       return;
     }
-    const jumlah = Number(formJumlah);
-    if (jumlah <= 0) {
-      toast.error("Jumlah pengeluaran harus lebih dari 0.");
+
+    let jumlah = 0;
+
+    if (formJumlah.toUpperCase().endsWith("K")) {
+      const angka = Number(
+        formJumlah.slice(0, -1)
+      );
+
+      jumlah = angka * 1000;
+    } else {
+      jumlah = Number(formJumlah);
+    }
+
+    if (isNaN(jumlah) || jumlah <= 0) {
+      toast.error(
+        "Jumlah pengeluaran harus lebih dari 0."
+      );
       return;
     }
+
     setIsSaving(true);
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
+
     if (userError || !user) {
       toast.error(
         "Sesi login tidak ditemukan. Silakan login kembali."
       );
+
       setIsSaving(false);
       router.push("/login");
+
       return;
     }
+
     const { error: insertError } = await supabase
       .from("pengeluaran")
       .insert({
@@ -94,50 +157,72 @@ export default function TambahPengeluaranPage() {
         jumlah: jumlah,
         keterangan: formKeterangan,
       });
+
     setIsSaving(false);
+
     if (insertError) {
       toast.error(
         "Gagal menyimpan pengeluaran. Silakan coba lagi."
       );
+
       console.error(
         "Insert error:",
         insertError.message
       );
+
       return;
     }
-    toast.success("Pengeluaran berhasil disimpan.");
+
+    toast.success(
+      "Pengeluaran berhasil disimpan."
+    );
+
     resetForm();
   };
+
   return (
     <div className="min-h-screen bg-[#0B0F19] relative overflow-hidden">
       <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+
       <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+
       <Sidebar
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
       />
+
       <main className="md:ml-64 flex flex-col min-h-screen relative">
-        <Header setIsSidebarOpen={setIsSidebarOpen} />
+        <Header
+          setIsSidebarOpen={setIsSidebarOpen}
+        />
+
         <div className="flex-1 p-5 md:p-6">
           <div className="w-full bg-[#111827] border border-white/10 rounded-xl shadow-lg shadow-black/20 p-5">
+
             <div className="flex items-center gap-2.5 mb-5">
               <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
                 <FaMoneyBillWave className="text-white text-sm" />
               </div>
+
               <div>
                 <h2 className="text-sm font-bold text-gray-100">
                   Form Pengeluaran
                 </h2>
               </div>
             </div>
+
             <form onSubmit={handleSimpan}>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+
                 <div>
                   <label className="block text-xs font-medium mb-1.5 text-gray-300">
                     Tanggal
                   </label>
+
                   <div className="relative">
                     <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none" />
+
                     <input
                       type="date"
                       value={formTanggal}
@@ -150,10 +235,12 @@ export default function TambahPengeluaranPage() {
                     />
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-xs font-medium mb-1.5 text-gray-300">
                     Jenis Pengeluaran
                   </label>
+
                   <select
                     value={formJenis}
                     onChange={(e) =>
@@ -172,28 +259,33 @@ export default function TambahPengeluaranPage() {
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-xs font-medium mb-1.5 text-gray-300">
                     Jumlah (Rp)
                   </label>
+
                   <input
                     type="text"
-                    inputMode="numeric"
-                    placeholder="000"
+                    inputMode="decimal"
+                    placeholder="1K"
                     value={formJumlah}
                     onChange={handleJumlahChange}
                     required
                     disabled={isSaving}
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition disabled:opacity-60"
                   />
+
                   <p className="text-[10px] text-gray-500 mt-1">
-                    Contoh: 150000 untuk Rp150.000
+                    Contoh: 7K = Rp7.000, 7.5K = Rp7.500
                   </p>
                 </div>
+
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium mb-1.5 text-gray-300">
                     Keterangan
                   </label>
+
                   <input
                     type="text"
                     placeholder="Contoh: Beli kabel dan konektor"
@@ -206,8 +298,11 @@ export default function TambahPengeluaranPage() {
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition disabled:opacity-60"
                   />
                 </div>
+
               </div>
+
               <div className="flex justify-end gap-2 mt-5">
+
                 <button
                   type="button"
                   onClick={resetForm}
@@ -216,6 +311,7 @@ export default function TambahPengeluaranPage() {
                 >
                   Reset
                 </button>
+
                 <button
                   type="submit"
                   disabled={isSaving}
@@ -225,7 +321,9 @@ export default function TambahPengeluaranPage() {
                     ? "Menyimpan..."
                     : "Simpan Pengeluaran"}
                 </button>
+
               </div>
+
             </form>
           </div>
         </div>
