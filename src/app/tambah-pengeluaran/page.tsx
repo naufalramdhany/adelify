@@ -267,7 +267,7 @@ export default function TambahPengeluaranPage() {
 
                   <input
                     type="text"
-                    inputMode="decimal"
+                    inputMode="text"
                     placeholder="1K"
                     value={formJumlah}
                     onChange={handleJumlahChange}
